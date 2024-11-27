@@ -6,6 +6,54 @@ library(lubridate)
 #my_mal_data <- read.csv("data/malaria data.csv")
 #RDT_data <- read.csv("data/RDT data.csv") 
 
+#loading user defined functions
+#Function to check if an Ethiopian year is a leap year
+is_leap_year <- function(year) {
+  return(year %% 4 == 3)
+}
+
+# Function to convert Ethiopian date to Gregorian date
+ethiopian_to_gregorian <- function(ethiopian_year, ethiopian_month) {
+  
+# Determine the Gregorian year
+  if (ethiopian_month > 4) {
+    gregorian_year <- ethiopian_year + 8
+  } else {
+    gregorian_year <- ethiopian_year + 7
+  }
+  
+# Convert Ethiopian month to Gregorian month
+  gregorian_month <- (ethiopian_month + 4) %% 12
+  if (gregorian_month == 0) {
+    gregorian_month <- 12
+  }
+  
+# Set the day to 1 (since we don't have specific date in the data frame)
+  gregorian_day <- 1
+  
+# Create a date object in "YYYY-MM-DD" format
+  return(as.Date(sprintf("%d-%02d-%02d", gregorian_year, gregorian_month, gregorian_day)))
+}
+
+# Ensuring year and month_number are numeric
+my_mal_data <- my_mal_data %>%
+  mutate(
+    year = as.numeric(year),
+    mon = as.numeric(mon)
+  )
+
+# Checking for any NA values after conversion
+if (any(is.na(my_mal_data$year)) || any(is.na(my_mal_data$mon))) {
+  stop("There are non-numeric values in the year or mon columns.")
+}
+
+# changing EC to GC in my_mal_data
+my_mal_data <- my_mal_data %>%
+  mutate(gregorian_date = sapply(1:nrow(my_mal_data), function(i) {
+    ethiopian_to_gregorian(my_mal_data$year[i], my_mal_data$mon[i])
+  }))
+
+
 # changing to RDS
 #saveRDS(my_mal_data, file = "data/malaria data.RDS")
 my_mal_data <- readRDS("data/malaria data.RDS") %>%
