@@ -2,57 +2,80 @@ install.packages("tidyverse")
 library(tidyverse)
 library("janitor")
 library(lubridate)
-#uploading the csv file
-#my_mal_data <- read.csv("data/malaria data.csv")
-#RDT_data <- read.csv("data/RDT data.csv") 
 
-#loading user defined functions
-#Function to check if an Ethiopian year is a leap year
-is_leap_year <- function(year) {
-  return(year %% 4 == 3)
+browseURL("https://github.com/asiraj-nd/Migration_model/blob/master/data_cleaning_flow_chart.pdf")
+
+# Provided functions
+month_to_cmc <- function(date) {
+  year = year(date)
+  month = month(date)
+  
+  cmc = (year - 1900) * 12 + month
+  return(cmc)
 }
 
-# Function to convert Ethiopian date to Gregorian date
-ethiopian_to_gregorian <- function(ethiopian_year, ethiopian_month) {
+cmc_to_month <- function(cmc) {
+  proc_cmc <- data.frame(year = floor(cmc / 12) + 1900) %>%
+    mutate(month = cmc - (year - 1900) * 12) %>%
+    mutate(ym_text = case_when(month == 0 ~ paste0(year - 1, "-", 12),
+                               TRUE ~ paste0(year, "-", month)))
   
-# Determine the Gregorian year
-  if (ethiopian_month > 4) {
-    gregorian_year <- ethiopian_year + 8
-  } else {
-    gregorian_year <- ethiopian_year + 7
-  }
-  
-# Convert Ethiopian month to Gregorian month
-  gregorian_month <- (ethiopian_month + 4) %% 12
-  if (gregorian_month == 0) {
-    gregorian_month <- 12
-  }
-  
-# Set the day to 1 (since we don't have specific date in the data frame)
-  gregorian_day <- 1
-  
-# Create a date object in "YYYY-MM-DD" format
-  return(as.Date(sprintf("%d-%02d-%02d", gregorian_year, gregorian_month, gregorian_day)))
+  return(ym(proc_cmc$ym_text))  
 }
 
-# Ensuring year and month_number are numeric
+ethiopian_to_greg <- function(cmc = NULL){
+  
+  ey = trunc((cmc-1)/12)+1900
+  em = cmc-(ey-1900)*12
+  ed = 1
+  
+  joffset = 1723856
+  n = 30*(em -1)  + ed - 1 # ed - 1 if actually 0
+  jd = joffset + 365 + 365*(ey-1) + trunc(ey/4) + n
+  
+  z = jd + 0.5
+  w = trunc((z-1867216.25)/36524.25)
+  x = trunc(w/4)
+  a = z+1+w-x
+  b = a+1524
+  c = trunc((b-122.1)/365.25)
+  d = trunc(365.25*c)
+  e = trunc((b-d)/30.6001)
+  f = trunc(30.6001*e)
+  day = b-d-f
+  
+  month = e-1
+  
+  month.low  <-(month<=12)*(e-1)
+  month.high <-(month>12)*(e-13)
+  month = month.low+month.high
+  
+  year.low <- (month < 3)*(c-4715)
+  year.high <-(month>=3)*(c-4716)
+  year = year.low + year.high
+  
+  outcmc = 12*(year - 1900)+month
+  return(outcmc)
+} 
+
+# Ensure year and mon are numeric before conversion
 my_mal_data <- my_mal_data %>%
   mutate(
     year = as.numeric(year),
     mon = as.numeric(mon)
   )
 
-# Checking for any NA values after conversion
+# Check for any NA values after conversion
 if (any(is.na(my_mal_data$year)) || any(is.na(my_mal_data$mon))) {
   stop("There are non-numeric values in the year or mon columns.")
 }
 
-# changing EC to GC in my_mal_data
-my_mal_data <- my_mal_data %>%
-  mutate(gregorian_date = sapply(1:nrow(my_mal_data), function(i) {
-    ethiopian_to_gregorian(my_mal_data$year[i], my_mal_data$mon[i])
-  }))
+#uploading the csv file
+#my_mal_data <- read.csv("data/malaria data.csv")
+RDT_data <- read.csv("data/RDT data.csv") 
 
+#loading user defined functions
+#Function to check if an Ethiopian year is a leap year
 
 # changing to RDS
 #saveRDS(my_mal_data, file = "data/malaria data.RDS")
@@ -76,26 +99,29 @@ my_mal_data <- my_mal_data %>%
 table(my_mal_data$data_element_new)
 
 #standardize region names
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   mutate(region= str_to_title(organisation_unit))
 
 #find names to modify
 my_mal_data %>% 
-  #filter(grepl("Region", region)) %>%
+ # filter(grepl("Region", region, ignore.case = FALSE, 
+              # perl = FALSE, fixed = FALSE, useBytes = FALSE)) %>%
   distinct(region)
 
 #removing region from the regional name
-my_mal_data <- my_mal_data %>% 
+my_mal_data_updated <- my_mal_data %>% 
   mutate(region= gsub(" Region", "", region))
 
 #removing Ethiopia
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   mutate(region= gsub(" Ethiopian", "", region)) %>%
   mutate(region= gsub(" Ethiopia", "", region)) 
 
 # remove city administration from Addis and Diredawa
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   mutate(region= gsub(" City Administration", "", region))
+
+#changing to title case
 
 #trimming the data name from RDT_data
 RDT_data$Data <- gsub(".*?or ", "", RDT_data$Data)
@@ -108,8 +134,8 @@ RDT_data <- RDT_data %>%
                        `RDT Positive` = "RDT positive"))
 
 #replacing long data element names into shorter ones
-my_mal_data <- my_mal_data %>%
-  mutate(Data = recode(Data,
+my_mal_data_updated <- my_mal_data %>%
+  mutate(data_element_new = recode(data_element_new,
                        " Malaria due to Plasmodium falciparum associated with Malaria due to Plasmodium Vivax (Mixed Malaria)" = "mixed malaria-PF/PV",
                        "Malaria due to Plasmodium vivax" = "PV malaria",
                        "Malaria due to Plasmodium falciparum" = "PF malaria",
@@ -120,15 +146,15 @@ my_mal_data <- my_mal_data %>%
 
 
 #renaming age column in short in my_mal_data
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   rename(age_range= `age_in_years_1_1_4_5_14_15_29_30_64_65`)
 
 #renaming age column in short in RDT_data
 RDT_data <- RDT_data %>%
-  rename(age= Age.in.years...1..1.4..5.14..15.29..30.64..65..)
+  rename(age= age)
 
 #replacing "to" as indicator of age range to a hyphen in my_mal_data
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   mutate(age_range= gsub("to", "-", age_range))
 
 
@@ -136,12 +162,13 @@ my_mal_data <- my_mal_data %>%
 RDT_data$age <- gsub("to", "-", RDT_data$age)
 
 #renaming OPD IPD in short in my_mal_data
-my_mal_data <- my_mal_data %>%
-  rename(dept = Departments.OPD.IPD.Categories)
+my_mal_data_updated <- my_mal_data %>%
+ rename(dept =departments_opd_ipd_categories)
 
 #renaming outcome in short in my_mal_data
-my_mal_data <- my_mal_data %>%
-  rename(outcome = Outcome..Morbidity..Mortality.)
+my_mal_data_updated <- my_mal_data %>%
+  rename(outcome = outcome_morbidity_mortality)
+
 unique(my_mal_data$period)
 
 # Separate the 'period' column into 'month' and 'year' in my_mal_data
@@ -152,10 +179,22 @@ my_mal_data <- my_mal_data %>%
 #ethiopian months assignment
 ethiopian_months <- data.frame(mon= 1:12, eth_mon= c("Meskerem", "Tikemet", "Hidar", "Tahisas", "Tir", "Yekatit", "Megabit", "Miyazia", "Ginbot", "Sene", "Hamle", "Nehase")) 
 
+
+
+
+#Removing unnecessary columns (col 11,12&13)
+#my_mal_data <- my_mal_data [, -c(11, 12, 13)]
+
+
+# Convert Ethiopian dates to CMC and then to Gregorian date
 #creating number for months
-my_mal_data <- my_mal_data %>%
-  left_join(ethiopian_months, by = c("month" = "eth_mon"))
-  
+my_mal_data_updated <- my_mal_data %>%
+  left_join(ethiopian_months, by = c("month" = "eth_mon"))%>%
+  mutate(year= as.numeric(year)) %>%
+  mutate(cmc = ((year-1900) *12 + mon)) %>% # Convert Ethiopian Year and Month to CMC
+        mutate(gregorian_date_cmc = ethiopian_to_greg(cmc)) %>% 
+  mutate(greg_period = cmc_to_month(gregorian_date_cmc)) # Convert CMC to Gregorian Date directly
+
 
 # Separate the 'period' column into 'month' and 'year' in RDT_data
 RDT_data <- RDT_data %>%
@@ -174,10 +213,6 @@ my_mal_data <- my_mal_data %>%
 RDT_data <- RDT_data %>%
   mutate(region = gsub(" region$", "", region, ignore.case = TRUE)) 
 
-
-#removing unwated columns- i don't know how they showed up
-my_mal_data <-
-  subset(my_mal_data, select = -10) #-10 is the column number i deleted
 
 #created a data frame for only RDT positive cases
 confirmed_cases <- RDT_data %>%
