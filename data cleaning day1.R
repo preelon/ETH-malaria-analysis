@@ -93,7 +93,7 @@ str(my_mal_data)
 table(my_mal_data$data_element)
 
 #trimming the data name from my_mal_data
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data %>%
   mutate(data_element_new = gsub(".*?- ", "", data_element)) 
 
 table(my_mal_data$data_element_new)
@@ -110,15 +110,15 @@ my_mal_data %>%
 
 #removing region from the regional name
 my_mal_data_updated <- my_mal_data %>% 
-  mutate(region= gsub(" Region", "", region))
+  mutate(region= gsub(" Region", "", organisation_unit))
 
 #removing Ethiopia
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   mutate(region= gsub(" Ethiopian", "", region)) %>%
   mutate(region= gsub(" Ethiopia", "", region)) 
 
 # remove city administration from Addis and Diredawa
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   mutate(region= gsub(" City Administration", "", region))
 
 #changing to title case
@@ -134,8 +134,8 @@ RDT_data <- RDT_data %>%
                        `RDT Positive` = "RDT positive"))
 
 #replacing long data element names into shorter ones
-my_mal_data_updated <- my_mal_data %>%
-  mutate(data_element_new = recode(data_element_new,
+my_mal_data_updated <- my_mal_data_updated %>%
+  mutate(data_element_new = recode(data_element,
                        " Malaria due to Plasmodium falciparum associated with Malaria due to Plasmodium Vivax (Mixed Malaria)" = "mixed malaria-PF/PV",
                        "Malaria due to Plasmodium vivax" = "PV malaria",
                        "Malaria due to Plasmodium falciparum" = "PF malaria",
@@ -146,7 +146,7 @@ my_mal_data_updated <- my_mal_data %>%
 
 
 #renaming age column in short in my_mal_data
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   rename(age_range= `age_in_years_1_1_4_5_14_15_29_30_64_65`)
 
 #renaming age column in short in RDT_data
@@ -154,7 +154,7 @@ RDT_data <- RDT_data %>%
   rename(age= age)
 
 #replacing "to" as indicator of age range to a hyphen in my_mal_data
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   mutate(age_range= gsub("to", "-", age_range))
 
 
@@ -162,17 +162,17 @@ my_mal_data_updated <- my_mal_data %>%
 RDT_data$age <- gsub("to", "-", RDT_data$age)
 
 #renaming OPD IPD in short in my_mal_data
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
  rename(dept =departments_opd_ipd_categories)
 
 #renaming outcome in short in my_mal_data
-my_mal_data_updated <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   rename(outcome = outcome_morbidity_mortality)
 
 unique(my_mal_data$period)
 
 # Separate the 'period' column into 'month' and 'year' in my_mal_data
-my_mal_data <- my_mal_data %>%
+my_mal_data_updated <- my_mal_data_updated %>%
   mutate(Period = as.character(period)) %>%  # Ensure 'period' is character type
   separate(Period, into = c("month", "year"), sep = " ")
 
@@ -183,17 +183,16 @@ ethiopian_months <- data.frame(mon= 1:12, eth_mon= c("Meskerem", "Tikemet", "Hid
 
 
 #Removing unnecessary columns (col 11,12&13)
-#my_mal_data <- my_mal_data [, -c(11, 12, 13)]
-
+#my_mal_data_updated <- my_mal_data [, -c(11, 12, 13)]
 
 # Convert Ethiopian dates to CMC and then to Gregorian date
 #creating number for months
-my_mal_data_updated <- my_mal_data %>%
-  left_join(ethiopian_months, by = c("month" = "eth_mon"))%>%
+my_mal_data_updated <- my_mal_data_updated %>%
+  #left_join(ethiopian_months, by = c("month" = "eth_mon"))%>%
   mutate(year= as.numeric(year)) %>%
   mutate(cmc = ((year-1900) *12 + mon)) %>% # Convert Ethiopian Year and Month to CMC
-        mutate(gregorian_date_cmc = ethiopian_to_greg(cmc)) %>% 
-  mutate(greg_period = cmc_to_month(gregorian_date_cmc)) # Convert CMC to Gregorian Date directly
+        mutate(gregorian_date_cmc = ethiopian_to_greg(cmc)) %>% #converting eth_cmc to greg_cmc
+  mutate(greg_period = cmc_to_month(gregorian_date_cmc)) # Convert greg CMC to Gregorian Date directly
 
 
 # Separate the 'period' column into 'month' and 'year' in RDT_data
@@ -255,6 +254,9 @@ conf_pres_summary <- conf_pres_summary %>%
   pivot_longer(cols = c("presumed", "confirmed"), names_to = "case type", 
                values_to = "count")
 
+library(usethis)
+library(gh)
 
+gh::gh_whoami()
 
   
